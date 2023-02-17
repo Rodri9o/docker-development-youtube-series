@@ -1,57 +1,74 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: postgres-config
+  name: postgres-demo-config
   labels:
-    app: postgres
+    app: postgres-demo
 data:
   POSTGRES_DB: postgresdb
   POSTGRES_USER: admin
-  POSTGRES_PASSWORD: admin123
+  POSTGRES_PASSWORD: "admin02145"
+  PGDATA: /data/pgdata/data
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: postgres
 spec:
-  serviceName: postgres
+  serviceName: postgres-demo-ss
   selector:
     matchLabels:
-      app: postgres
+      app: postgres-demo
   replicas: 1
+  minReadySeconds: 20 # by default is 0
   template:
     metadata:
       labels:
-        app: postgres
+        app: postgres-demo # must match .spec.selector.matchLabels
     spec:
+      terminationGracePeriodSeconds: 15
       containers:
-        - name: postgres
-          image: postgres:10.4
+        - name: postgres-db
+          image: postgres:15.2
           imagePullPolicy: "IfNotPresent"
           ports:
           - containerPort: 5432
+            name: postgres-port
+          resources:
+            limits:
+              cpu: 100m
+              memory: 512Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
           envFrom:
           - configMapRef:
-              name: postgres-config
+              name: postgres-demo-config
           volumeMounts:
           - name: data
-            mountPath: /var/lib/postgresql/data
-      volumes:
-      - name: data
-        persistentVolumeClaim:
-          claimName: example-claim
+            mountPath: /data/pgdata
+  # Volume Claim
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      #accessModes: ["ReadWriteMany"]
+      #storageClassName: "longhorn"
+      resources:
+        requests:
+          storage: 4Gi
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: postgres
-  labels:
-    app: postgres
+  name: postgres-demo-svc
 spec:
+  type: ClusterIP
   selector:
-    app: postgres
+    app: postgres-demo
   ports:
-    - protocol: TCP
-      name: http
+    - name: postgres-svc-port
+      protocol: TCP
       port: 5432
-      targetPort: 5432
+      targetPort: postgres-port
